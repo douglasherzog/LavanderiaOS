@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% block title %}{{ action }} Usuário{% endblock %}
+{% block content %}
+<h3>{{ action }} Usuário</h3>
+<form method="post">
+  {{ form.hidden_tag() }}
+  <div class="row">
+    <div class="col-md-4 mb-3">
+      {{ form.username.label(class_='form-label') }}
+      {{ form.username(class_='form-control' + (' is-invalid' if form.username.errors else '')) }}
+      {% for e in form.username.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
+    </div>
+    <div class="col-md-6 mb-3">
+      {{ form.full_name.label(class_='form-label') }}
+      {{ form.full_name(class_='form-control' + (' is-invalid' if form.full_name.errors else '')) }}
+      {% for e in form.full_name.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
+    </div>
+    <div class="col-md-2 mb-3">
+      {{ form.role.label(class_='form-label') }}
+      {{ form.role(class_='form-select searchable' + (' is-invalid' if form.role.errors else '')) }}
+      {% for e in form.role.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-md-4 mb-3">
+      {{ form.password.label(class_='form-label') }}
+      {{ form.password(class_='form-control' + (' is-invalid' if form.password.errors else '')) }}
+      {% if action == 'Editar' %}
+        <small class="text-muted">Deixe em branco para manter a senha atual.</small>
+      {% endif %}
+      <div class="form-text">Regras: mínimo 6 caracteres, pelo menos 1 maiúscula, 1 número e 1 caractere especial.</div>
+      {% for e in form.password.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
+    </div>
+    <div class="col-md-4 mb-3">
+      {{ form.confirm_password.label(class_='form-label') }}
+      {{ form.confirm_password(class_='form-control' + (' is-invalid' if form.confirm_password.errors else '')) }}
+      {% for e in form.confirm_password.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
+    </div>
+  </div>
+  <button class="btn btn-primary">Salvar</button>
+  <a class="btn btn-secondary" href="{{ url_for('users.list_users') }}">Cancelar</a>
+</form>
+{% endblock %}

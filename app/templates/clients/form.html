@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+{% block title %}{{ action }} Cliente{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <h5 class="mb-0">{{ action }} Cliente</h5>
+  </div>
+  <div class="card-body">
+    <form method="post" novalidate>
+      {{ form.hidden_tag() }}
+      <div class="row">
+        <div class="col-md-6 mb-3">
+          {{ form.name.label(class_='form-label') }}
+          {{ form.name(class_='form-control') }}
+        </div>
+        <div class="col-md-3 mb-3">
+          {{ form.phone.label(class_='form-label') }}
+          {{ form.phone(type='text', class_='form-control', inputmode='numeric', id='phone') }}
+          <div class="form-text">Formato automático: (XX)XXXXX-XXXX ou (XX)XXXX-XXXX</div>
+        </div>
+        <div class="col-md-3 mb-3">
+          {{ form.document.label(class_='form-label') }}
+          {{ form.document(class_='form-control') }}
+        </div>
+      </div>
+      <div class="row">
+        <div class="col-md-12 mb-3">
+          {{ form.address.label(class_='form-label') }}
+          {{ form.address(class_='form-control') }}
+        </div>
+      </div>
+      <div class="d-flex gap-2">
+        <button class="btn btn-primary">Salvar</button>
+        <a class="btn btn-secondary" href="{{ url_for('clients.list_clients') }}">Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+  (function() {
+    const el = document.getElementById('phone');
+    if (!el) return;
+    const onlyDigits = (s) => (s || '').toString().replace(/\D/g, '');
+    function applyMask() {
+      let v = onlyDigits(el.value);
+      // Decide mask: 11 digits -> (##) #####-####; 10 digits -> (##) ####-####
+      if (v.length > 11) v = v.slice(0,11);
+      if (v.length >= 7) {
+        if (v.length === 11) {
+          el.value = `(${v.slice(0,2)}) ${v.slice(2,7)}-${v.slice(7,11)}`;
+        } else {
+          // fallback for 10 digits
+          el.value = `(${v.slice(0,2)}) ${v.slice(2,6)}-${v.slice(6,10)}`;
+        }
+      } else if (v.length >= 3) {
+        el.value = `(${v.slice(0,2)}) ${v.slice(2)}`;
+      } else if (v.length > 0) {
+        el.value = `(${v}`;
+      } else {
+        el.value = '';
+      }
+    }
+    el.addEventListener('input', applyMask);
+    el.addEventListener('focus', applyMask);
+    el.addEventListener('blur', applyMask);
+    if (el.value) applyMask();
+  })();
+  </script>
+{% endblock %}
+

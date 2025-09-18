@@ -1,0 +1,91 @@
+{% extends 'base.html' %}
+{% block title %}Clientes{% endblock %}
+{% block content %}
+<style>
+  main.container { padding-bottom: 84px; }
+  @media (max-width: 576px){ main.container { padding-bottom: 120px; } }
+  .list-toolbar-top { top: 64px; z-index: 1029; }
+  @media (max-width: 576px){ .list-toolbar-top { top: 56px; } }
+  .list-toolbar-top .container { gap: .25rem; }
+  .toolbar-title { letter-spacing: .2px; }
+  .toolbar-title .icon { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background: rgba(13,110,253,.08); color: #0d6efd; }
+  .toolbar-title .text { font-weight: 700; font-size: 1.1rem; }
+</style>
+
+<div class="list-toolbar-top sticky-top bg-body border-bottom shadow-sm">
+  <div class="container py-2">
+    <form method="get" class="row gx-2 gy-1 align-items-end justify-content-between">
+      <div class="col-12 d-flex justify-content-between align-items-center gap-2">
+        <div class="d-flex align-items-center gap-2 toolbar-title mb-0">
+          <span class="icon"><i class="bi bi-people"></i></span>
+          <span class="text">Clientes</span>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+          <div class="input-group input-group-sm">
+            <span class="input-group-text"><i class="bi bi-search"></i></span>
+            <input type="text" name="q" value="{{ q }}" class="form-control" placeholder="Buscar por nome">
+          </div>
+          <button class="btn btn-sm btn-primary" title="Buscar"><i class="bi bi-funnel"></i><span class="d-none d-md-inline ms-1">Filtrar</span></button>
+          <button type="button" class="btn btn-sm btn-outline-danger" id="clear_filters_clients" title="Limpar filtros"><i class="bi bi-x-circle"></i><span class="d-none d-md-inline ms-1">Limpar</span></button>
+        </div>
+      </div>
+    </form>
+  </div>
+ </div>
+
+<div class="card mt-2">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-striped table-hover mb-0">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Nome</th>
+            <th>Telefone</th>
+            <th>Documento</th>
+            <th>Endereço</th>
+            <th class="text-end">Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in clients %}
+          <tr>
+            <td>{{ c.id }}</td>
+            <td>{{ c.name }}</td>
+            <td>{{ c.phone|phone_br }}</td>
+            <td>{{ c.document }}</td>
+            <td>{{ c.address }}</td>
+            <td class="text-end">
+              <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('clients.edit_client', client_id=c.id) }}" title="Editar"><i class="bi bi-pencil-square"></i></a>
+              <form action="{{ url_for('clients.delete_client', client_id=c.id) }}" method="post" class="d-inline" onsubmit="return confirm('Excluir cliente?');">
+                <button class="btn btn-sm btn-outline-danger" title="Excluir"><i class="bi bi-trash"></i></button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="fixed-bottom bg-body border-top shadow-sm">
+  <div class="container py-2 d-flex justify-content-end">
+    <a href="{{ url_for('clients.create_client') }}" class="btn btn-sm btn-success">
+      <i class="bi bi-plus-lg"></i><span class="d-none d-sm-inline ms-1">Novo Cliente</span>
+    </a>
+  </div>
+</div>
+
+<script>
+  (function(){
+    var btn = document.getElementById('clear_filters_clients');
+    if (btn){
+      btn.addEventListener('click', function(){
+        window.location.href = "{{ url_for('clients.list_clients') }}";
+      });
+    }
+  })();
+</script>
+{% endblock %}
+

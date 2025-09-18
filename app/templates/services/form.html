@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+{% block title %}{{ action }} Serviço{% endblock %}
+{% block content %}
+<h3>{{ action }} Serviço</h3>
+<form method="post" novalidate>
+  {{ form.hidden_tag() }}
+  <div class="row">
+    <div class="col-md-6 mb-3">
+      {{ form.name.label(class_='form-label') }}
+      {{ form.name(class_='form-control' + (' is-invalid' if form.name.errors else '')) }}
+      {% for e in form.name.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
+    </div>
+    <div class="col-md-3 mb-3">
+      {{ form.price.label(class_='form-label') }}
+      {{ form.price(type='text', class_='form-control' + (' is-invalid' if form.price.errors else ''), step='0.01', inputmode='decimal', id='price') }}
+      <div class="form-text">Use vírgula ou ponto para decimais (ex.: 29,90 ou 29.90).</div>
+      {% for e in form.price.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
+    </div>
+    <div class="col-md-3 mb-3">
+      {{ form.unit.label(class_='form-label') }}
+      {{ form.unit(class_='form-control' + (' is-invalid' if form.unit.errors else '')) }}
+      {% for e in form.unit.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
+    </div>
+  </div>
+  <button class="btn btn-primary">Salvar</button>
+  <a class="btn btn-secondary" href="{{ url_for('services.list_services') }}">Cancelar</a>
+</form>
+
+<script>
+  (function() {
+    const input = document.getElementById('price');
+    if (!input) return;
+
+    // Initialize formatting if value exists
+    const formatBRL = (num) => {
+      return num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    };
+
+    const unmask = (val) => {
+      // keep only digits
+      const digits = (val || '').toString().replace(/\D/g, '');
+      return digits;
+    };
+
+    const applyMask = () => {
+      const digits = unmask(input.value);
+      const cents = digits.length ? parseInt(digits, 10) : 0;
+      const value = cents / 100;
+      input.value = formatBRL(value);
+    };
+
+    input.addEventListener('input', applyMask);
+    input.addEventListener('focus', applyMask);
+    input.addEventListener('blur', applyMask);
+
+    // Run on load if there is a pre-filled value
+    if (input.value) applyMask();
+  })();
+</script>
+{% endblock %}

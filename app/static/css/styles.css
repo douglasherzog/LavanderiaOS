@@ -1,0 +1,32 @@
+body { padding-bottom: 40px; }
+/* Global look & feel */
+body {
+  background-color: #f8f9fb;
+}
+
+/* Navbar */
+.navbar-brand { font-weight: 600; letter-spacing: .2px; }
+.nav-link.active { font-weight: 600; }
+
+/* Cards */
+.card { border: 1px solid rgba(0,0,0,.06); box-shadow: 0 2px 6px rgba(0,0,0,.04); }
+.card-header { background: linear-gradient(180deg, #ffffff, #f9fafb); font-weight: 600; }
+
+/* Tables */
+.table thead th { background-color: #f1f3f5; border-bottom-width: 1px; }
+.table-hover tbody tr:hover { background-color: #f7f9fc; }
+
+/* Forms */
+.form-control:focus { box-shadow: 0 0 0 .2rem rgba(13,110,253,.15); }
+label.form-label { font-weight: 500; }
+
+/* Helpers */
+.page-title { display:flex; align-items:center; gap:.75rem; margin-bottom:1rem; }
+.btn-group-gutter > * { margin-right: .25rem; }
+
+/* Footer */
+footer.app-footer { color:#6c757d; font-size:.9rem; border-top:1px solid rgba(0,0,0,.06); padding:1rem 0; margin-top:2rem; }
+
+/* Orders list: highlight fully paid rows */
+tr.row-quitado { background-color: #e9f7ef; }
+tr.row-quitado > td { border-color: rgba(0,0,0,.05); }

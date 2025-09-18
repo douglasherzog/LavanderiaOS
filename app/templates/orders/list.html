@@ -1,0 +1,261 @@
+{% extends 'base.html' %}
+{% block title %}Ordens de Serviço{% endblock %}
+{% block content %}
+<style>
+  /* Reserve space so fixed bottom toolbar doesn't cover the table */
+  main.container { padding-bottom: 110px; }
+  @media (max-width: 576px){ main.container { padding-bottom: 150px; } }
+  .orders-toolbar .form-label { display: none; }
+  .orders-toolbar .form-control, .orders-toolbar .form-select { height: calc(1.5em + .4rem + 2px); padding: .2rem .45rem; font-size: .85rem; }
+  .orders-toolbar .btn-sm { padding: .2rem .45rem; }
+  .orders-toolbar select.form-select { min-width: 120px; }
+  .orders-toolbar .btn-group .btn { white-space: nowrap; }
+  .orders-toolbar .container { gap: .25rem; }
+  .orders-toolbar .search-input { width: 200px; max-width: 40vw; }
+  .orders-toolbar .date-input { width: 140px; }
+  .orders-toolbar { z-index: 1030; }
+  .orders-toolbar-top { top: 64px; z-index: 1029; }
+  @media (max-width: 576px){ .orders-toolbar-top { top: 56px; } }
+  .toolbar-title { letter-spacing: .2px; }
+  .toolbar-title .icon { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background: rgba(13,110,253,.08); color: #0d6efd; }
+  .toolbar-title .text { font-weight: 700; font-size: 1.1rem; }
+</style>
+
+<div class="orders-toolbar-top sticky-top bg-body border-bottom shadow-sm">
+  <div class="container py-2">
+    <form method="get" class="row gx-2 gy-1 align-items-end justify-content-between" id="filter_form">
+      <input type="hidden" name="pay" value="{{ pay_filter }}">
+      <div class="col-auto">
+        <label class="form-label small mb-0 visually-hidden">Pagamento</label>
+        <div class="btn-group" role="group" aria-label="Filtrar por pagamento">
+          <a class="btn btn-sm btn-outline-secondary {% if (pay_filter|default('all'))=='all' %}active{% endif %}" href="{{ url_for('orders.list_orders', pay='all', q=q, start=start, end=end, date_field=date_field) }}">Todas</a>
+          <a class="btn btn-sm btn-outline-secondary {% if (pay_filter|default('all'))=='em_aberto' %}active{% endif %}" href="{{ url_for('orders.list_orders', pay='em_aberto', q=q, start=start, end=end, date_field=date_field) }}">Em aberto</a>
+          <a class="btn btn-sm btn-outline-secondary {% if (pay_filter|default('all'))=='quitado' %}active{% endif %}" href="{{ url_for('orders.list_orders', pay='quitado', q=q, start=start, end=end, date_field=date_field) }}">Quitadas</a>
+        </div>
+      </div>
+      <div class="col flex-grow-1">
+        <label class="form-label small mb-0 visually-hidden">Buscar</label>
+        <div class="input-group input-group-sm">
+          <span class="input-group-text"><i class="bi bi-search"></i></span>
+          <input name="q" value="{{ q }}" class="form-control search-input" placeholder="Buscar...">
+        </div>
+      </div>
+      <div class="col-auto">
+        <label class="form-label small mb-0 visually-hidden">Campo</label>
+        <select name="date_field" class="form-select form-select-sm">
+          <option value="created" {% if (date_field|default('created'))=='created' %}selected{% endif %}>Data da ordem</option>
+          <option value="delivery" {% if (date_field|default('created'))=='delivery' %}selected{% endif %}>Data de entrega</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <label class="form-label small mb-0 visually-hidden">De</label>
+        <input type="date" name="start" value="{{ start }}" class="form-control form-control-sm date-input" id="start_date" placeholder="De">
+      </div>
+      <div class="col-auto">
+        <label class="form-label small mb-0 visually-hidden">Até</label>
+        <input type="date" name="end" value="{{ end }}" class="form-control form-control-sm date-input" id="end_date" placeholder="Até">
+      </div>
+      <div class="col-auto">
+        <label class="form-label small mb-0 visually-hidden">Período</label>
+        <select class="form-select form-select-sm" id="quick_period" title="Período rápido">
+          <option value="">Personalizado</option>
+          <option value="today">Hoje</option>
+          <option value="week">Semana atual</option>
+          <option value="7d">Últimos 7 dias</option>
+          <option value="30d">Últimos 30 dias</option>
+          <option value="month">Mês atual</option>
+          <option value="prev_month">Mês anterior</option>
+        </select>
+      </div>
+      <div class="col-12 d-flex justify-content-between align-items-center gap-1">
+        <div class="d-flex align-items-center gap-2 toolbar-title mb-0">
+          <span class="icon"><i class="bi bi-list-check"></i></span>
+          <span class="text">Ordens de Serviço</span>
+        </div>
+        <div class="d-flex gap-1">
+          <button class="btn btn-sm btn-primary" title="Aplicar filtros"><i class="bi bi-funnel"></i><span class="d-none d-md-inline ms-1">Filtrar</span></button>
+          <button type="button" class="btn btn-sm btn-outline-danger" id="clear_filters" title="Limpar filtros e mostrar todas">
+            <i class="bi bi-x-circle"></i><span class="d-none d-md-inline ms-1">Limpar</span>
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+
+<div class="card">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+<table class="table table-striped mb-0">
+  <thead class="table-light">
+    <tr>
+      <th>ID</th>
+      <th>Cliente</th>
+      <th>Status</th>
+      <th>Total</th>
+      <th>Pagamento</th>
+      <th>Entrega</th>
+      <th>Criada em</th>
+      <th>Ações</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for o in orders %}
+    {% set extra = (orders_extra|selectattr('order','equalto', o)|list|first) %}
+    <tr class="{% if extra and extra.pay_status == 'quitado' %}row-quitado{% endif %}">
+      <td>{{ o.id }}</td>
+      <td>{{ o.client.name }}</td>
+      <td>{{ o.status }}</td>
+      <td>
+        {% if extra %}
+          R$ {{ extra.grand_total|money_br }}
+          <div class="small text-muted">Pago: R$ {{ extra.paid|money_br }}</div>
+        {% else %}
+          R$ {{ o.total|money_br }}
+        {% endif %}
+      </td>
+      <td>
+        {% if extra and extra.pay_status == 'quitado' %}
+          <span class="badge bg-success">Quitado</span>
+        {% else %}
+          <span class="badge bg-warning text-dark">Em aberto</span>
+          {% if extra %}<small class="text-muted">(Falta R$ {{ extra.remaining|money_br }})</small>{% else %}<small class="text-muted">(Falta R$ {{ o.total|money_br }})</small>{% endif %}
+        {% endif %}
+      </td>
+      <td>{{ o.delivery_date and (o.delivery_date|date_br) or '-' }}</td>
+      <td>{{ o.created_at|datetime_br }}</td>
+      <td class="text-nowrap">
+        <a class="btn btn-sm btn-secondary" href="{{ url_for('orders.edit_order', order_id=o.id) }}">
+          <i class="bi bi-pencil-square"></i>
+        </a>
+        <form action="{{ url_for('orders.print_order', order_id=o.id) }}" method="post" class="d-inline" onsubmit="return confirm('Imprimir ordem #{{ o.id }}?');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token_list }}">
+          {% if printers %}
+            <select name="printer_name" class="form-select form-select-sm d-inline w-auto align-middle">
+              {% for prn in printers %}
+                <option value="{{ prn }}" {% if loop.first %}selected{% endif %}>{{ prn }}</option>
+              {% endfor %}
+            </select>
+          {% endif %}
+          <button class="btn btn-sm btn-outline-secondary" title="Imprimir"><i class="bi bi-printer"></i></button>
+        </form>
+        <form action="{{ url_for('orders.delete_order', order_id=o.id) }}" method="post" class="d-inline" onsubmit="return confirm('Excluir ordem?');">
+          <button class="btn btn-sm btn-danger" title="Excluir"><i class="bi bi-trash"></i></button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+    </div>
+  </div>
+</div>
+<style>
+  /* Table card styles remain here; toolbar css moved above */
+</style>
+
+<div class="fixed-bottom bg-body border-top shadow-sm orders-toolbar">
+  <div class="container py-2 d-flex align-items-center justify-content-end">
+    <a href="{{ url_for('orders.create_order') }}" class="btn btn-sm btn-success">
+      <i class="bi bi-plus-lg"></i><span class="d-none d-sm-inline ms-1">Nova Ordem</span>
+    </a>
+  </div>
+</div>
+<script>
+  (function(){
+    function fmt(d){
+      const y = d.getFullYear();
+      const m = String(d.getMonth()+1).padStart(2,'0');
+      const day = String(d.getDate()).padStart(2,'0');
+      return `${y}-${m}-${day}`;
+    }
+    function weekRange(now){
+      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const dow = d.getDay(); // 0 Sun .. 6 Sat
+      const delta = (dow + 6) % 7; // days since Monday
+      const start = new Date(d);
+      start.setDate(d.getDate() - delta);
+      const end = new Date(start);
+      end.setDate(start.getDate() + 6);
+      return {start, end};
+    }
+    function prevMonthRange(now){
+      const start = new Date(now.getFullYear(), now.getMonth()-1, 1);
+      const end = new Date(now.getFullYear(), now.getMonth(), 0);
+      return {start, end};
+    }
+    const sel = document.getElementById('quick_period');
+    const startEl = document.getElementById('start_date');
+    const endEl = document.getElementById('end_date');
+    const form = document.getElementById('filter_form');
+    const clearBtn = document.getElementById('clear_filters');
+    if (clearBtn){
+      clearBtn.addEventListener('click', function(){
+        try { window.location.href = "{{ url_for('orders.list_orders') }}"; return; } catch(e) {}
+        const q = form && form.querySelector('input[name="q"]');
+        const payHidden = form && form.querySelector('input[name="pay"]');
+        const df = form && form.querySelector('select[name="date_field"]');
+        if (q) q.value = '';
+        if (startEl) startEl.value = '';
+        if (endEl) endEl.value = '';
+        if (sel) sel.value = '';
+        if (payHidden) payHidden.value = 'all';
+        if (df) df.value = 'created';
+        form && form.submit();
+      });
+    }
+    if (sel && startEl && endEl && form){
+      sel.addEventListener('change', function(){
+        const now = new Date();
+        let start = null, end = null;
+        if (this.value === 'today'){
+          start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          end = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        } else if (this.value === 'week'){
+          const r = weekRange(now); start = r.start; end = r.end;
+        } else if (this.value === '7d'){
+          end = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          start = new Date(end); start.setDate(start.getDate() - 6);
+        } else if (this.value === '30d'){
+          end = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          start = new Date(end); start.setDate(start.getDate() - 29);
+        } else if (this.value === 'month'){
+          start = new Date(now.getFullYear(), now.getMonth(), 1);
+          end = new Date(now.getFullYear(), now.getMonth()+1, 0);
+        } else if (this.value === 'prev_month'){
+          const r = prevMonthRange(now); start = r.start; end = r.end;
+        }
+        if (start && end){
+          startEl.value = fmt(start);
+          endEl.value = fmt(end);
+          form.submit();
+        }
+      });
+      // Preselect option based on current values
+      try {
+        const s = startEl.value, e = endEl.value;
+        if (s && e){
+          const today = fmt(new Date());
+          if (s === today && e === today) { sel.value = 'today'; return; }
+          const now = new Date();
+          const eD = new Date(e + 'T00:00:00');
+          const sD = new Date(s + 'T00:00:00');
+          const diff = Math.round((eD - sD) / (1000*60*60*24));
+          const w = weekRange(now);
+          if (s === fmt(w.start) && e === fmt(w.end)) { sel.value = 'week'; return; }
+          if (diff === 6){ sel.value = '7d'; return; }
+          if (diff === 29){ sel.value = '30d'; return; }
+          const ms = fmt(new Date(now.getFullYear(), now.getMonth(), 1));
+          const me = fmt(new Date(now.getFullYear(), now.getMonth()+1, 0));
+          if (s === ms && e === me) { sel.value = 'month'; return; }
+          const pm = prevMonthRange(now);
+          if (s === fmt(pm.start) && e === fmt(pm.end)) { sel.value = 'prev_month'; return; }
+        }
+      } catch (err) { /* ignore */ }
+    }
+  })();
+  </script>
+{% endblock %}
+

@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+{% block title %}Login - Lavanderia{% endblock %}
+{% block content %}
+<style>
+  .login-hero {
+    background: linear-gradient(135deg, rgba(13,110,253,.08), rgba(25,135,84,.08));
+    border-radius: .75rem;
+  }
+  .login-card { max-width: 420px; }
+</style>
+
+<div class="min-vh-100 d-flex align-items-center justify-content-center">
+  <div class="login-card w-100 px-3">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body p-4">
+        <div class="login-hero p-3 mb-3 d-flex align-items-center">
+          <div class="me-2 text-primary"><i class="bi bi-droplet-half fs-3"></i></div>
+          <div>
+            <div class="fw-semibold">Lavanderia OS</div>
+            <div class="text-muted small">Acesse sua conta</div>
+          </div>
+        </div>
+
+        <form method="post" novalidate>
+          {{ form.hidden_tag() }}
+          <div class="mb-3">
+            <label class="form-label" for="username">Usuário</label>
+            <div class="input-group input-group-lg">
+              <span class="input-group-text"><i class="bi bi-person"></i></span>
+              {{ form.username(class_='form-control', id='username', placeholder='Seu usuário') }}
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="password">Senha</label>
+            <div class="input-group input-group-lg">
+              <span class="input-group-text"><i class="bi bi-lock"></i></span>
+              {{ form.password(class_='form-control', id='password', placeholder='Sua senha') }}
+              <button class="btn btn-outline-secondary" type="button" id="toggle_pwd" tabindex="-1" title="Mostrar/ocultar senha"><i class="bi bi-eye"></i></button>
+            </div>
+          </div>
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <div class="form-check">
+              {{ form.remember(class_='form-check-input', id='remember') }}
+              {{ form.remember.label(class_='form-check-label', for='remember') }}
+            </div>
+            <div class="small text-muted">&nbsp;</div>
+          </div>
+          <button type="submit" class="btn btn-primary w-100 btn-lg"><i class="bi bi-box-arrow-in-right me-1"></i> {{ form.submit.label.text }}</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function(){
+    try {
+      var btn = document.getElementById('toggle_pwd');
+      var input = document.getElementById('password');
+      if (btn && input){
+        btn.addEventListener('click', function(){
+          var isText = input.getAttribute('type') === 'text';
+          input.setAttribute('type', isText ? 'password' : 'text');
+          btn.querySelector('i').className = isText ? 'bi bi-eye' : 'bi bi-eye-slash';
+        });
+      }
+    } catch(e) {}
+  })();
+</script>
+{% endblock %}

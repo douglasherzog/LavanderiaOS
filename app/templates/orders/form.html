@@ -1,0 +1,665 @@
+{% extends 'base.html' %}
+{% block title %}{{ action }} Ordem{% endblock %}
+{% block content %}
+<h3>{{ action }} Ordem</h3>
+<div id="ctx" data-focus-services="{% if (focus_services|default(false)) %}1{% else %}0{% endif %}"></div>
+<form method="post" novalidate>
+  {{ form.hidden_tag() }}
+  <div class="row">
+    <div class="col-md-4 mb-3">
+      {{ form.client_id.label(class_='form-label') }}
+      {% if order %}
+        {{ form.client_id(class_='form-select searchable', disabled=True) }}
+        <input type="hidden" name="client_id" value="{{ order.client_id }}">
+        <div class="form-text">O cliente não pode ser alterado após incluir itens.</div>
+      {% else %}
+        <select name="client_id" class="form-select searchable" required>
+          <option value="" selected>Selecionar Cliente</option>
+          {# Render choices except the placeholder (id 0 or empty) #}
+          {% for val, label in form.client_id.choices %}
+            {% if val and val != 0 %}
+              <option value="{{ val }}">{{ label }}</option>
+            {% endif %}
+          {% endfor %}
+        </select>
+        <div class="form-text">Selecione um cliente para habilitar o botão "Adicionar Itens".</div>
+      {% endif %}
+    </div>
+    <div class="col-md-4 mb-3">
+      {{ form.status.label(class_='form-label') }}
+      {{ form.status(class_='form-select', id='status') }}
+    </div>
+    <div class="col-md-4 mb-3" id="delivery_group" style="display:none;">
+      {{ form.delivery_date.label(class_='form-label') }}
+      {{ form.delivery_date(type='date', class_='form-control', id='delivery_date') }}
+      <div class="form-text">Informe a data de entrega quando o status for "Entregue".</div>
+    </div>
+  </div>
+  <div class="mb-3">
+    {{ form.notes.label(class_='form-label') }}
+    {{ form.notes(class_='form-control') }}
+  </div>
+  {% if not order %}
+  <div class="d-flex justify-content-end gap-2">
+    <button id="btn_add_items" name="_action" value="save_order" class="btn btn-primary" disabled>
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true" class="me-1 align-text-top">
+        <path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      Adicionar Itens
+    </button>
+    <a class="btn btn-secondary" href="{{ url_for('orders.list_orders') }}">Cancelar</a>
+  </div>
+  <script>
+    (function(){
+      const clientSel = document.querySelector('select[name="client_id"]');
+      const btn = document.getElementById('btn_add_items');
+      function toggle(){
+        if (!clientSel || !btn) return;
+        const val = parseInt(clientSel.value || '0', 10) || 0;
+        btn.disabled = (val <= 0);
+      }
+      if (clientSel) {
+        clientSel.addEventListener('change', toggle);
+        toggle();
+      }
+    })();
+  </script>
+  {% endif %}
+</form>
+
+{% if order %}
+<hr>
+<a id="items"></a>
+<h4>Itens</h4>
+<script id="svcPrices" type="application/json">{{ (service_prices|default({}))|tojson }}</script>
+<form method="post" action="{{ url_for('orders.edit_order', order_id=order.id) }}" class="row g-2" novalidate>
+  {{ item_form.hidden_tag() }}
+  <input type="hidden" name="_anchor" value="items">
+  <div class="col-md-4">
+    <select name="service_id" class="form-select searchable" id="service_select" data-current="">
+      <option value="" selected>Selecionar Serviço</option>
+      {% for s in services_list %}
+        <option value="{{ s.id }}">{{ s.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-md-3">
+    {{ item_form.description(class_='form-control' + (' is-invalid' if item_form.description.errors else ''), placeholder='Descrição') }}
+    {% for e in item_form.description.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
+  </div>
+  <div class="col-md-2">
+    {{ item_form.quantity(class_='form-control' + (' is-invalid' if item_form.quantity.errors else ''), id='add_quantity') }}
+    {% for e in item_form.quantity.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
+  </div>
+  <div class="col-md-2">
+    {{ item_form.unit_price(type='text', class_='form-control money' + (' is-invalid' if item_form.unit_price.errors else ''), inputmode='decimal', id='unit_price') }}
+    {% for e in item_form.unit_price.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
+  </div>
+  <div class="col-md-1 d-grid"><button name="_action" value="add_item" class="btn btn-success">+</button></div>
+  <div class="col-md-12 text-end small text-muted">Subtotal do item a adicionar: <strong id="add_subtotal">R$ 0,00</strong></div>
+</form>
+
+<table id="items_table" class="table table-sm mt-3 align-middle">
+  <thead>
+    <tr>
+      <th>Serviço</th>
+      <th>Descrição</th>
+      <th style="width: 110px;">Qtd</th>
+      <th style="width: 160px;">Preço Unit</th>
+      <th style="width: 160px;">Subtotal</th>
+      <th style="width: 110px;"></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for it in order.items %}
+    <tr>
+      <td>
+          <select id="svc_inline_{{ it.id }}" name="service_id" class="form-select svc-inline searchable" style="min-width: 220px" form="uform-{{ it.id }}" data-current="{{ it.service_id }}">
+            {% for s in services_list %}
+              <option value="{{ s.id }}" {% if s.id == it.service_id %}selected{% endif %}>{{ s.name }}</option>
+            {% endfor %}
+          </select>
+      </td>
+      <td>
+          <input id="desc_inline_{{ it.id }}" type="text" class="form-control" name="description" value="{{ it.description or '' }}" form="uform-{{ it.id }}" />
+      </td>
+      <td>
+          <input id="qty_inline_{{ it.id }}" type="number" min="1" class="form-control" name="quantity" value="{{ it.quantity }}" form="uform-{{ it.id }}" />
+      </td>
+      <td>
+          <input id="price_inline_{{ it.id }}" type="text" inputmode="decimal" class="form-control money" name="unit_price" value="{{ '%.2f'|format(it.unit_price) | replace('.', ',') }}" form="uform-{{ it.id }}" />
+      </td>
+      <td>R$ {{ it.subtotal|money_br }}</td>
+      <td class="text-end">
+        <form id="uform-{{ it.id }}" method="post" action="{{ url_for('orders.update_item', item_id=it.id) }}" class="d-inline" novalidate>
+          <input type="hidden" name="_anchor" value="items">
+          {% if csrf_token_inline %}
+            <input type="hidden" name="csrf_token" value="{{ csrf_token_inline }}">
+          {% endif %}
+          <div class="btn-group">
+            <button class="btn btn-sm btn-outline-primary">Salvar</button>
+          </div>
+        </form>
+        <form method="post" action="{{ url_for('orders.delete_item', item_id=it.id) }}" class="d-inline" onsubmit="return confirm('Remover item?');">
+          <input type="hidden" name="_anchor" value="items">
+          <button class="btn btn-sm btn-outline-danger">x</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<!-- Campos unificados de desconto/acréscimo abaixo dos serviços -->
+<form id="save_form" method="post" novalidate>
+  {{ form.hidden_tag() }}
+  <input type="hidden" name="client_id" id="hid_client_id" value="{% if order %}{{ order.client_id }}{% endif %}">
+  <input type="hidden" name="status" id="hid_status" value="{{ form.status.data }}">
+  <input type="hidden" name="notes" id="hid_notes" value="{{ form.notes.data }}">
+  <input type="hidden" name="delivery_date" id="hid_delivery_date" value="{{ form.delivery_date.data }}">
+  <div class="row">
+    <div class="col-md-3 mb-3">
+      {{ form.discount.label(class_='form-label') }}
+      {{ form.discount(type='text', class_='form-control', inputmode='decimal', id='discount') }}
+      <div class="form-text">Use % para percentual (ex.: 10%), ou apenas números para moeda (ex.: 10,00)</div>
+      <div id="discount_warn" class="form-text text-warning d-none">Percentual inválido (> 100%). Ajustado para 100%.</div>
+    </div>
+    <div class="col-md-3 mb-3">
+      {{ form.surcharge.label(class_='form-label') }}
+      {{ form.surcharge(type='text', class_='form-control', inputmode='decimal', id='surcharge') }}
+      <div class="form-text">Use % para percentual (ex.: 5%), ou apenas números para moeda (ex.: 5,00)</div>
+      <div id="surcharge_warn" class="form-text text-warning d-none">Percentual inválido (> 100%). Ajustado para 100%.</div>
+    </div>
+  </div>
+  <table class="table table-sm align-middle">
+    <tbody>
+      <tr>
+        <td colspan="4" class="text-end"><strong>Total itens</strong></td>
+        <td colspan="2"><strong id="total_items_text">R$ {{ (order.items|map(attribute='subtotal')|sum)|money_br }}</strong></td>
+      </tr>
+      <tr>
+        <td colspan="4" class="text-end">Desconto</td>
+        <td colspan="2" id="discount_text">R$ {{ (((order.discount or 0) + (order.items|map(attribute='subtotal')|sum) * ((order.discount_percent or 0)/100.0))|money_br) }}</td>
+      </tr>
+      <tr>
+        <td colspan="4" class="text-end">Acréscimo</td>
+        <td colspan="2" id="surcharge_text">R$ {{ (((order.surcharge or 0) + (order.items|map(attribute='subtotal')|sum) * ((order.surcharge_percent or 0)/100.0))|money_br) }}</td>
+      </tr>
+      <tr>
+        <td colspan="4" class="text-end"><strong>Total Geral</strong></td>
+        <td colspan="2"><strong id="grand_total_text">R$ {{ order.total|money_br }}</strong></td>
+      </tr>
+    </tbody>
+  </table>
+</form>
+
+<hr>
+<a id="payments"></a>
+<h4>Pagamentos</h4>
+<div class="row g-3">
+  <div class="col-md-4">
+    <div class="card">
+      <div class="card-body">
+        <div class="d-flex flex-column gap-2">
+          <div class="d-flex justify-content-between"><strong>Total Geral</strong><strong id="grand_total_card_text">R$ {{ (grand_total|default(0.0))|money_br }}</strong></div>
+          <div class="d-flex justify-content-between"><span>Total pago</span><span id="paid_total_text" class="text-success">R$ {{ (paid_total|default(0.0))|money_br }}</span></div>
+          <div class="d-flex justify-content-between"><span>Restante</span><span id="remaining_total_text" class="{{ 'text-danger' if (remaining_total|default(0.0))>0 else 'text-success' }}">R$ {{ (remaining_total|default(0.0))|money_br }}</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-8">
+    <div class="card">
+      <div class="card-header">Lançar pagamento</div>
+      <div class="card-body">
+        <form id="pay_form" method="post" class="row g-3" novalidate>
+          {{ pay_form.hidden_tag() }}
+          <input type="hidden" name="_anchor" value="payments">
+          <!-- Carry current header discount/surcharge into payment submission -->
+          <input type="hidden" name="discount_shadow" id="discount_shadow">
+          <input type="hidden" name="surcharge_shadow" id="surcharge_shadow">
+          <div class="col-md-3">
+            {{ pay_form.amount.label(class_='form-label') }}
+            {{ pay_form.amount(class_='form-control money', inputmode='decimal', placeholder='0,00', disabled=(remaining_total|default(0.0))<=0) }}
+          </div>
+          <div class="col-md-3">
+            {{ pay_form.method.label(class_='form-label') }}
+            {{ pay_form.method(class_='form-select', disabled=(remaining_total|default(0.0))<=0) }}
+          </div>
+          <div class="col-md-3">
+            {{ pay_form.when_type.label(class_='form-label') }}
+            <select name="when_type" class="form-select" id="when_type_sel" {% if (remaining_total|default(0.0))<=0 %}disabled{% endif %}>
+              <option value="entrada" {% if has_entry_payment %}disabled{% endif %}>Entrada</option>
+              <option value="retirada">Retirada</option>
+              <option value="apos">Após</option>
+            </select>
+            {% if has_entry_payment %}<div class="form-text">Já existe pagamento de Entrada.</div>{% endif %}
+          </div>
+          <div class="col-md-3">
+            {{ pay_form.note.label(class_='form-label') }}
+            {{ pay_form.note(class_='form-control', disabled=(remaining_total|default(0.0))<=0) }}
+          </div>
+          <div class="col-12 d-flex justify-content-between align-items-center">
+            <div id="pay_hint" class="text-muted small"></div>
+            <button name="_action" value="add_payment" class="btn btn-success" {% if (remaining_total|default(0.0))<=0 %}disabled{% endif %}>Adicionar Pagamento</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card mt-3">
+  <div class="card-header">Pagamentos registrados</div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-striped table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Quando</th>
+            <th>Forma</th>
+            <th>Obs.</th>
+            <th class="text-end">Valor</th>
+            <th class="text-end">Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in payments %}
+          <tr>
+            <td>{{ p.created_at|datetime_br('%d/%m/%Y %H:%M') }}</td>
+            <td>{{ 'Entrada' if p.when_type=='entrada' else ('Retirada' if p.when_type=='retirada' else 'Após') }}</td>
+            <td>{{ p.method|capitalize }}</td>
+            <td>{{ p.note or '-' }}</td>
+            <td class="text-end">R$ {{ p.amount|money_br }}</td>
+            <td class="text-end">
+              <form method="post" class="d-inline" onsubmit="return confirm('Remover pagamento?');">
+                <input type="hidden" name="payment_id" value="{{ p.id }}">
+                <input type="hidden" name="_anchor" value="payments">
+                <button name="_action" value="delete_payment" class="btn btn-sm btn-outline-danger">Excluir</button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" class="text-center text-muted">Nenhum pagamento registrado</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function() {
+    function maskMoneyInput(el) {
+      const unmask = (val) => (val || '').toString().replace(/\D/g, '');
+      const formatBRL = (num) => num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const apply = () => {
+        const digits = unmask(el.value);
+        const cents = digits.length ? parseInt(digits, 10) : 0;
+        el.value = formatBRL(cents / 100);
+      };
+      el.addEventListener('input', apply);
+      el.addEventListener('focus', apply);
+      el.addEventListener('blur', apply);
+      if (el.value) apply();
+    }
+    function maskMoneyOrPercent(el) {
+      const unmask = (val) => (val || '').toString().replace(/\D/g, '');
+      const formatBRL = (num) => num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const apply = () => {
+        const raw = (el.value || '').toString().trim();
+        if (raw.endsWith('%')) {
+          // Keep only digits and %; clamp 0-100
+          const digits = (raw.replace(/[^\d%]/g, ''));
+          const num = parseInt(digits.replace('%','') || '0', 10);
+          const clamped = Math.max(0, Math.min(100, isNaN(num) ? 0 : num));
+          el.value = clamped + '%';
+          // Show warn if overflowed >100
+          const warnEl = (el.id === 'discount') ? document.getElementById('discount_warn') : (el.id === 'surcharge') ? document.getElementById('surcharge_warn') : null;
+          if (warnEl) {
+            if (!isNaN(num) && num > 100) {
+              warnEl.classList.remove('d-none');
+            } else {
+              warnEl.classList.add('d-none');
+            }
+          }
+        } else {
+          const digits = unmask(raw);
+          const cents = digits.length ? parseInt(digits, 10) : 0;
+          el.value = formatBRL(cents / 100);
+          // Hide warn when not percent input
+          const warnEl = (el.id === 'discount') ? document.getElementById('discount_warn') : (el.id === 'surcharge') ? document.getElementById('surcharge_warn') : null;
+          if (warnEl) warnEl.classList.add('d-none');
+        }
+      };
+      el.addEventListener('input', apply);
+      el.addEventListener('focus', apply);
+      el.addEventListener('blur', apply);
+      if (el.value) apply();
+    }
+    const priceAdd = document.getElementById('unit_price');
+    if (priceAdd) maskMoneyInput(priceAdd);
+    // Auto-preencher preço ao selecionar serviço
+    const svcSelect = document.getElementById('service_select');
+    let servicePrices = {};
+    try {
+      const spNode = document.getElementById('svcPrices');
+      if (spNode) { servicePrices = JSON.parse(spNode.textContent || '{}'); }
+    } catch(e) { servicePrices = {}; }
+    function setPriceFromService() {
+      if (!svcSelect || !priceAdd) return;
+      const val = svcSelect.value;
+      const id = parseInt(val, 10);
+      if (id && servicePrices[id] != null) {
+        const cents = Math.round(parseFloat(servicePrices[id]) * 100) || 0;
+        priceAdd.value = (cents/100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        // Dispara recálculo
+        const evt = new Event('input');
+        priceAdd.dispatchEvent(evt);
+      }
+    }
+    if (svcSelect) {
+      svcSelect.addEventListener('change', setPriceFromService);
+    }
+    // Inline rows: update unit price when changing service select
+    function setInlinePriceFromService(selectEl) {
+      try {
+        const val = selectEl.value;
+        const id = parseInt(val, 10);
+        const form = selectEl.closest('form');
+        if (!form) return;
+        const unitInput = form.querySelector('input[name="unit_price"]');
+        if (!unitInput) return;
+        if (id && servicePrices[id] != null) {
+          const cents = Math.round(parseFloat(servicePrices[id]) * 100) || 0;
+          unitInput.value = (cents/100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+          unitInput.dispatchEvent(new Event('input'));
+        }
+      } catch (e) { /* noop */ }
+    }
+    document.querySelectorAll('select.svc-inline').forEach(sel => {
+      sel.addEventListener('change', () => {
+        setInlinePriceFromService(sel);
+        // also recalc totals live
+        recalcTotals();
+      });
+    });
+    const addQty = document.getElementById('add_quantity');
+    const addSubtotalEl = document.getElementById('add_subtotal');
+    function recalcAddSubtotal() {
+      if (!addSubtotalEl) return;
+      const qty = addQty ? (parseInt(addQty.value || '0', 10) || 0) : 0;
+      const price = parseMoney(priceAdd ? priceAdd.value : '0');
+      const sub = qty * price;
+      addSubtotalEl.textContent = 'R$ ' + formatBRL(sub);
+    }
+    if (addQty) addQty.addEventListener('input', () => { recalcAddSubtotal(); });
+    if (priceAdd) priceAdd.addEventListener('input', () => { recalcAddSubtotal(); });
+    recalcAddSubtotal();
+    const discount = document.getElementById('discount');
+    if (discount) maskMoneyOrPercent(discount);
+    const surcharge = document.getElementById('surcharge');
+    if (surcharge) maskMoneyOrPercent(surcharge);
+    document.querySelectorAll('input.money').forEach(maskMoneyInput);
+    // Mask on payments amount
+    document.querySelectorAll('form .money').forEach(maskMoneyInput);
+    // Live recompute of payments summary when discount/surcharge change
+    function parseBRLMoneyToFloat(txt){
+      if (txt == null) return 0;
+      const s = (''+txt).trim().replace(/[^0-9.,-]/g, '').replace(/\./g, '').replace(',', '.');
+      const v = parseFloat(s);
+      return isNaN(v) ? 0 : v;
+    }
+    function textBRL(v){ return 'R$ ' + (Number(v)||0).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+    function sumItemsTotal(){
+      const rows = document.querySelectorAll('#items_table tbody tr');
+      let total = 0;
+      rows.forEach(tr => {
+        const tds = tr.querySelectorAll('td');
+        if (tds.length >= 5){
+          const subtotalCell = tds[4];
+          total += parseBRLMoneyToFloat(subtotalCell.textContent);
+        }
+      });
+      return total;
+    }
+    const paidTotalConst = {{ (paid_total|default(0.0))|tojson }};
+    function parseFromDomText(sel){
+      const el = document.querySelector(sel);
+      if (!el) return null;
+      return parseBRLMoneyToFloat(el.textContent || '');
+    }
+    function recomputePaymentSummary(){
+      // Prefer the already computed totals under the items table if present
+      let itemsTotal = parseFromDomText('#total_items_text');
+      if (itemsTotal === null) itemsTotal = sumItemsTotal();
+      const discountEl = document.getElementById('discount');
+      const surchargeEl = document.getElementById('surcharge');
+      let dFixed = 0, dPercent = 0, sFixed = 0, sPercent = 0;
+      if (discountEl && discountEl.value){
+        const val = discountEl.value.trim();
+        if (val.endsWith('%')){
+          const p = parseBRLMoneyToFloat(val.slice(0, -1));
+          dPercent = Math.max(0, Math.min(100, p));
+        } else {
+          dFixed = parseBRLMoneyToFloat(val);
+        }
+      }
+      if (surchargeEl && surchargeEl.value){
+        const val = surchargeEl.value.trim();
+        if (val.endsWith('%')){
+          const p = parseBRLMoneyToFloat(val.slice(0, -1));
+          sPercent = Math.max(0, Math.min(100, p));
+        } else {
+          sFixed = parseBRLMoneyToFloat(val);
+        }
+      }
+      const percDiscountValue = itemsTotal * (dPercent/100.0);
+      const percSurchargeValue = itemsTotal * (sPercent/100.0);
+      // If DOM shows grand total under items, prefer it
+      let grand = parseFromDomText('#grand_total_text');
+      if (grand === null) {
+        grand = Math.max(0, itemsTotal - percDiscountValue - dFixed + sFixed + percSurchargeValue);
+      }
+      const remaining = Math.max(0, grand - (Number(paidTotalConst)||0));
+      // Update UI
+      const itemsTotalText = document.getElementById('items_total_text');
+      const discountTotalText = document.getElementById('discount_total_text');
+      const surchargeTotalText = document.getElementById('surcharge_total_text');
+      const grandTotalCardText = document.getElementById('grand_total_card_text');
+      const remainingTotalText = document.getElementById('remaining_total_text');
+      if (itemsTotalText) itemsTotalText.textContent = textBRL(itemsTotal);
+      if (discountTotalText) discountTotalText.textContent = '- ' + textBRL(dFixed + percDiscountValue);
+      if (surchargeTotalText) surchargeTotalText.textContent = '+ ' + textBRL(sFixed + percSurchargeValue);
+      if (grandTotalCardText) grandTotalCardText.textContent = textBRL(grand);
+      if (remainingTotalText){
+        remainingTotalText.textContent = textBRL(remaining);
+        remainingTotalText.classList.toggle('text-success', remaining <= 0.000001);
+        remainingTotalText.classList.toggle('text-danger', remaining > 0.000001);
+      }
+      // Toggle payment form enabled state
+      const disable = remaining <= 0.000001;
+      const payAmt = document.querySelector('#pay_form input[name="amount"]');
+      const payMethod = document.querySelector('#pay_form select[name="method"]');
+      const payWhen = document.getElementById('when_type_sel');
+      const payNote = document.querySelector('#pay_form input[name="note"]');
+      const payBtn = document.querySelector('#pay_form button[name="_action"][value="add_payment"]');
+      [payAmt, payMethod, payWhen, payNote, payBtn].forEach(el => { if (el){ el.disabled = disable; } });
+    }
+    const discountEl = document.getElementById('discount');
+    const surchargeEl = document.getElementById('surcharge');
+    if (discountEl){ discountEl.addEventListener('input', recomputePaymentSummary); }
+    if (surchargeEl){ surchargeEl.addEventListener('input', recomputePaymentSummary); }
+    // Initial compute
+    recomputePaymentSummary();
+    // Sync discount/surcharge into payments form before submit
+    const payForm = document.getElementById('pay_form');
+    if (payForm) {
+      payForm.addEventListener('submit', function(){
+        const d = document.getElementById('discount');
+        const s = document.getElementById('surcharge');
+        const dH = document.getElementById('discount_shadow');
+        const sH = document.getElementById('surcharge_shadow');
+        if (dH && d) dH.value = d.value || '';
+        if (sH && s) sH.value = s.value || '';
+      });
+    }
+    // Show/Hide delivery date based on status
+    const statusEl = document.getElementById('status');
+    const delGroup = document.getElementById('delivery_group');
+    const delInput = document.getElementById('delivery_date');
+    function todayStr() {
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = String(now.getMonth() + 1).padStart(2, '0');
+      const d = String(now.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+    function syncDeliveryVisibility() {
+      if (!statusEl || !delGroup) return;
+      const show = (statusEl.value === 'entregue');
+      delGroup.style.display = show ? '' : 'none';
+      if (show) {
+        if (delInput && !delInput.value) { delInput.value = todayStr(); }
+      } else {
+        if (delInput) { delInput.value = ''; }
+      }
+    }
+    if (statusEl) {
+      statusEl.addEventListener('change', syncDeliveryVisibility);
+      syncDeliveryVisibility();
+    }
+    // Sync header fields into hidden inputs before submitting Save Order
+    const saveForm = document.getElementById('save_form');
+    if (saveForm) {
+      saveForm.addEventListener('submit', function() {
+        const clientSel = document.querySelector('select[name="client_id"]');
+        const statusSel = document.getElementById('status');
+        const notesEl = document.getElementById('notes');
+        const hidClient = document.getElementById('hid_client_id');
+        const hidStatus = document.getElementById('hid_status');
+        const hidNotes = document.getElementById('hid_notes');
+        const hidDelDate = document.getElementById('hid_delivery_date');
+        if (clientSel && hidClient) hidClient.value = clientSel.value || '';
+        if (statusSel && hidStatus) hidStatus.value = statusSel.value || '';
+        if (notesEl && hidNotes) hidNotes.value = notesEl.value || '';
+        if (hidDelDate && delInput) hidDelDate.value = delInput.value || '';
+      });
+    }
+    // Focus combo de serviços após criação, quando solicitado
+    const ctx = document.getElementById('ctx');
+    const FOCUS_SERVICES = ctx && ctx.dataset && ctx.dataset.focusServices === '1';
+    if (FOCUS_SERVICES) {
+      const svc = document.querySelector('select[name="service_id"]');
+      if (svc) { setTimeout(() => svc.focus(), 100); }
+    }
+
+    function parseMoney(str) {
+      if (!str) return 0;
+      const s = (str+'').replace(/[^\d,\.]/g,'').replace(/\./g,'').replace(',', '.');
+      const v = parseFloat(s);
+      return isNaN(v) ? 0 : v;
+    }
+    function parseCombined(str, itemsTotal) {
+      const raw = (str || '').toString().trim();
+      if (raw.endsWith('%')) {
+        const n = parseFloat(raw.replace('%','').replace(',','.'));
+        const pct = isNaN(n) ? 0 : Math.max(0, Math.min(100, n));
+        return { fixed: 0, percent: pct };
+      }
+      return { fixed: parseMoney(raw), percent: 0 };
+    }
+    function sumItemsFromDom() {
+      let total = 0;
+      document.querySelectorAll('#items_table tbody tr').forEach(tr => {
+        const qtyEl = tr.querySelector('input[name="quantity"]');
+        const priceEl = tr.querySelector('input[name="unit_price"]');
+        const subtotalCell = tr.querySelector('td:nth-child(5)');
+        if (qtyEl && priceEl) {
+          const qty = parseInt(qtyEl.value || '0', 10) || 0;
+          const price = parseMoney(priceEl.value);
+          total += qty * price;
+        } else if (subtotalCell && subtotalCell.textContent.includes('R$')) {
+          const val = parseMoney(subtotalCell.textContent);
+          total += val;
+        }
+      });
+      return total;
+    }
+    function formatBRL(num) {
+      return num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    function recalcTotals() {
+      const itemsTotal = sumItemsFromDom();
+      const d = parseCombined(discount ? discount.value : '0', itemsTotal);
+      const s = parseCombined(surcharge ? surcharge.value : '0', itemsTotal);
+      const dPercValue = itemsTotal * (d.percent / 100.0);
+      const sPercValue = itemsTotal * (s.percent / 100.0);
+      const grand = Math.max(0, itemsTotal - dPercValue - d.fixed + s.fixed + sPercValue);
+      const totalItemsText = document.getElementById('total_items_text');
+      const dText = document.getElementById('discount_text');
+      const sText = document.getElementById('surcharge_text');
+      const gText = document.getElementById('grand_total_text');
+      if (totalItemsText) totalItemsText.textContent = 'R$ ' + formatBRL(itemsTotal);
+      if (dText) dText.textContent = 'R$ ' + formatBRL(d.fixed + dPercValue);
+      if (sText) sText.textContent = 'R$ ' + formatBRL(s.fixed + sPercValue);
+      if (gText) gText.textContent = 'R$ ' + formatBRL(grand);
+      // Also sync payments card immediately
+      try { recomputePaymentSummary(); } catch(e) {}
+    }
+    ['input','change'].forEach(ev => {
+      if (discount) discount.addEventListener(ev, recalcTotals);
+      if (surcharge) surcharge.addEventListener(ev, recalcTotals);
+      document.querySelectorAll('input[name="quantity"], input[name="unit_price"]').forEach(el => el.addEventListener(ev, recalcTotals));
+    });
+    recalcTotals();
+  })();
+</script>
+{% endif %}
+<style>
+  /* Prevent sticky footer from overlapping content */
+  main.container { padding-bottom: 84px; }
+  @media (max-width: 576px){ main.container { padding-bottom: 120px; } }
+  .sticky-actions select.form-select { min-width: 240px; }
+</style>
+
+{% if order %}
+<div class="fixed-bottom bg-body border-top sticky-actions">
+  <div class="container py-2 d-flex flex-wrap justify-content-end align-items-center gap-2">
+    <a class="btn btn-secondary" href="{{ url_for('orders.list_orders') }}">
+      <i class="bi bi-arrow-left me-1"></i> Voltar
+    </a>
+    {% if printers %}
+      <select name="printer_name" class="form-select w-auto searchable" title="Escolha a impressora" form="save_form">
+        {% for prn in printers %}
+          <option value="{{ prn }}" {% if loop.first %}selected{% endif %}>{{ prn }}</option>
+        {% endfor %}
+      </select>
+    {% endif %}
+    <button type="submit" class="btn btn-outline-secondary"
+            form="save_form"
+            formmethod="post"
+            formaction="{{ url_for('orders.print_order', order_id=order.id) }}"
+            title="Imprimir ordem na impressora térmica configurada"
+            onclick="return confirm('Deseja imprimir esta ordem?');">
+      <i class="bi bi-printer me-1"></i> Imprimir
+    </button>
+    <button class="btn btn-primary" name="_action" value="save_order" form="save_form">
+      <i class="bi bi-save me-1"></i> Salvar Ordem
+    </button>
+  </div>
+  </div>
+{% else %}
+<div class="fixed-bottom bg-body border-top sticky-actions">
+  <div class="container py-2 d-flex justify-content-end gap-2">
+    <a class="btn btn-secondary" href="{{ url_for('orders.list_orders') }}">
+      <i class="bi bi-arrow-left me-1"></i> Voltar
+    </a>
+    <button class="btn btn-primary" name="_action" value="save_order" form="save_form">
+      <i class="bi bi-save me-1"></i> Salvar Ordem
+    </button>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

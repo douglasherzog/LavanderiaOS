@@ -1,0 +1,88 @@
+{% extends 'base.html' %}
+{% block title %}Serviços{% endblock %}
+{% block content %}
+<style>
+  main.container { padding-bottom: 84px; }
+  @media (max-width: 576px){ main.container { padding-bottom: 120px; } }
+  .list-toolbar-top { top: 64px; z-index: 1029; }
+  @media (max-width: 576px){ .list-toolbar-top { top: 56px; } }
+  .list-toolbar-top .container { gap: .25rem; }
+  .toolbar-title { letter-spacing: .2px; }
+  .toolbar-title .icon { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background: rgba(13,110,253,.08); color: #0d6efd; }
+  .toolbar-title .text { font-weight: 700; font-size: 1.1rem; }
+</style>
+
+<div class="list-toolbar-top sticky-top bg-body border-bottom shadow-sm">
+  <div class="container py-2">
+    <form method="get" class="row gx-2 gy-1 align-items-end justify-content-between">
+      <div class="col-12 d-flex justify-content-between align-items-center gap-2">
+        <div class="d-flex align-items-center gap-2 toolbar-title mb-0">
+          <span class="icon"><i class="bi bi-gear"></i></span>
+          <span class="text">Serviços</span>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+          <div class="input-group input-group-sm">
+            <span class="input-group-text"><i class="bi bi-search"></i></span>
+            <input type="text" name="q" value="{{ q }}" class="form-control" placeholder="Buscar por serviço">
+          </div>
+          <button class="btn btn-sm btn-primary" title="Buscar"><i class="bi bi-funnel"></i><span class="d-none d-md-inline ms-1">Filtrar</span></button>
+          <button type="button" class="btn btn-sm btn-outline-danger" id="clear_filters_services" title="Limpar filtros"><i class="bi bi-x-circle"></i><span class="d-none d-md-inline ms-1">Limpar</span></button>
+        </div>
+      </div>
+    </form>
+  </div>
+ </div>
+
+<div class="card mt-2">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-striped table-hover mb-0">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Serviço</th>
+            <th>Preço</th>
+            <th>Unidade</th>
+            <th class="text-end">Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in services %}
+          <tr>
+            <td>{{ s.id }}</td>
+            <td>{{ s.name }}</td>
+            <td>R$ {{ s.price|money_br }}</td>
+            <td>{{ s.unit }}</td>
+            <td class="text-end">
+              <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('services.edit_service', service_id=s.id) }}" title="Editar"><i class="bi bi-pencil-square"></i></a>
+              <form action="{{ url_for('services.delete_service', service_id=s.id) }}" method="post" class="d-inline" onsubmit="return confirm('Excluir serviço?');">
+                <button class="btn btn-sm btn-outline-danger" title="Excluir"><i class="bi bi-trash"></i></button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="fixed-bottom bg-body border-top shadow-sm">
+  <div class="container py-2 d-flex justify-content-end">
+    <a href="{{ url_for('services.create_service') }}" class="btn btn-sm btn-success">
+      <i class="bi bi-plus-lg"></i><span class="d-none d-sm-inline ms-1">Novo Serviço</span>
+    </a>
+  </div>
+</div>
+
+<script>
+  (function(){
+    var btn = document.getElementById('clear_filters_services');
+    if (btn){
+      btn.addEventListener('click', function(){
+        window.location.href = "{{ url_for('services.list_services') }}";
+      });
+    }
+  })();
+</script>
+{% endblock %}
